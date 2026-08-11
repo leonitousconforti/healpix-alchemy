@@ -105,9 +105,19 @@ def test_fields_in_90pct_credible_region(bench: Bench) -> None:
         .filter(subquery1.columns.cum_prob <= CREDIBLE_LEVEL)
         .scalar_subquery()
     )
+    # Materialize the credible region as merged tiles so that the planner
+    # scans it first and probes the (much larger) field tile index, instead
+    # of the reverse. The probdensity threshold comes from a subquery, so
+    # the planner cannot estimate its selectivity and otherwise picks a
+    # join order that is slower by orders of magnitude.
+    credible = (
+        sa.select(func.union(SkymapTile.hpx).label("hpx"))
+        .filter(SkymapTile.probdensity >= min_probdensity)
+        .cte("credible")
+        .prefix_with("MATERIALIZED")
+    )
     query = sa.select(sa.func.count(FieldTile.id.distinct())).filter(
-        SkymapTile.hpx.overlaps(FieldTile.hpx),
-        SkymapTile.probdensity >= min_probdensity,
+        credible.columns.hpx.overlaps(FieldTile.hpx)
     )
 
     # Run benchmark
