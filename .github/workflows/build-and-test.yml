@@ -27,38 +27,48 @@ jobs:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
         os: [ubuntu-latest, macos-latest, windows-latest]
 
+    # Use the server started below instead of spawning one per test session:
+    # initdb cannot create a data directory under pytest's temporary
+    # directories on Windows, because Python 3.12 and later create those with a
+    # protected owner-only ACL whose attributes initdb cannot read.
+    env:
+      POSTGRESQL_NOPROC: "1"
+
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install PostgreSQL
-        if: ${{ runner.os == 'macOS' }}
-        run: brew install postgresql
+      # The test databases are disposable, so trade durability for speed, as
+      # the postgresql_proc fixture does when it spawns a server itself.
+      - name: Start PostgreSQL
+        if: ${{ runner.os != 'Windows' }}
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            brew install postgresql
+            # Without a valid locale the postmaster refuses to start.
+            export LC_ALL=en_US.UTF-8
+          else
+            export LC_ALL=C.UTF-8
+          fi
+          export PATH="$(pg_config --bindir):$PATH"
+          initdb -D "$RUNNER_TEMP/pgdata" -U postgres --auth=trust
+          pg_ctl -D "$RUNNER_TEMP/pgdata" -l "$RUNNER_TEMP/pgdata.log" \
+            -o "-p 5432 -c fsync=off -c synchronous_commit=off -c full_page_writes=off" start
 
-      - name: Set up PostgreSQL for Windows
+      - name: Start PostgreSQL
         if: ${{ runner.os == 'Windows' }}
         shell: pwsh
         run: |
-          # PostgreSQL is preinstalled on the Windows runners, but its bin
-          # directory is not on PATH, so pytest-postgresql cannot find
-          # pg_config to locate pg_ctl.
-          $bin = $env:PGBIN
-          if (-not $bin -or -not (Test-Path $bin)) {
-            $bin = Get-ChildItem 'C:\Program Files\PostgreSQL\*\bin' -ErrorAction SilentlyContinue |
-              Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
-          }
-          if (-not $bin) { throw 'Could not find a PostgreSQL bin directory' }
-          Write-Host "Using $bin"
-          Add-Content $env:GITHUB_PATH $bin
-
-          # Keep the PostgreSQL data directories that pytest-postgresql creates
-          # off the system drive, as pytest-postgresql itself does on Windows.
-          # Forward slashes because pytest splits PYTEST_ADDOPTS with shlex,
-          # which would eat the backslashes.
-          $temp = '${{ runner.temp }}'.Replace('\', '/')
-          Add-Content $env:GITHUB_ENV "PYTEST_ADDOPTS=--basetemp=$temp/pytest-basetemp"
+          # PostgreSQL is preinstalled but not on PATH, and its service is
+          # disabled, so initialize and start a server of our own. Windows has
+          # neither C.UTF-8 nor en_US.UTF-8, so settle for the C locale.
+          $env:PATH = "$env:PGBIN;$env:PATH"
+          $env:LC_ALL = 'C'
+          initdb -D "$env:RUNNER_TEMP\pgdata" -U postgres --auth=trust
+          pg_ctl -D "$env:RUNNER_TEMP\pgdata" -l "$env:RUNNER_TEMP\pgdata.log" `
+            -o "-p 5432 -c fsync=off -c synchronous_commit=off -c full_page_writes=off" start
 
       - run: uv sync --locked --group test
       - run: uv run --no-sync pytest --benchmark-skip
