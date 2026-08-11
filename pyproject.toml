@@ -41,6 +41,9 @@ test = [
 
 [tool.setuptools_scm]
 
+[tool.uv]
+default-groups = ["dev", "test"]
+
 [tool.pytest.ini_options]
 addopts = "--doctest-glob *.md"
 doctest_plus = true
@@ -53,32 +56,31 @@ filterwarnings = [
 
 [tool.ruff.lint]
 extend-select = [
+    "A",    # shadowing Python builtins
     "B",    # bugbear: likely bugs and design problems
     "C4",   # unnecessary comprehensions and generator calls
+    "DTZ",  # naive (timezone-unaware) datetimes
+    "ERA",  # commented-out code
     "EXE",  # shebang and executable-bit consistency
     "FA",   # missing `from __future__ import annotations`
+    "FBT",  # boolean positional arguments ("boolean traps")
+    "FURB", # modernization refactors
     "I",    # import sorting
     "ICN",  # conventional import aliases (np, pd, ...)
     "INP",  # missing __init__.py in package directories
-    "SLF",  # private member access on other objects
-    "TID",  # tidy imports
     "NPY",  # numpy-specific rules
+    "PD",   # pandas anti-patterns
     "PERF", # performance anti-patterns
     "PIE",  # misc lints
     "PT",   # pytest style
+    "PTH",  # os.path calls that should use pathlib
     "RUF",  # ruff-specific rules
     "SIM",  # simplifiable code
+    "SLF",  # private member access on other objects
+    "T20",  # stray print statements
+    "TID",  # tidy imports
     "UP",   # outdated syntax for the minimum Python version
     "W",    # whitespace and deprecation warnings
-    # Currently clean on this codebase; enable any of these at no cost:
-    # "A",    # shadowing Python builtins
-    # "DTZ",  # naive (timezone-unaware) datetimes
-    # "ERA",  # commented-out code
-    # "FBT",  # boolean positional arguments ("boolean traps")
-    # "FURB", # modernization refactors
-    # "PD",   # pandas anti-patterns
-    # "PTH",  # os.path calls that should use pathlib
-    # "T20",  # stray print statements
     # Would require some cleanup first (violation counts as of 2026-08):
     # "ANN",  # require type annotations (~90; enable after annotating the API)
     # "ARG",  # unused function arguments (8, mostly interface-required params)
