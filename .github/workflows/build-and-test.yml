@@ -43,8 +43,10 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Fork PRs get a read-only token that cannot post comments.
-    if: ${{ github.event_name == 'push' || !github.event.pull_request.head.repo.fork }}
+    # Cross-repo PRs get a read-only token that cannot post comments.
+    # Compare repo names rather than checking `head.repo.fork`, so that
+    # same-repo PRs still run benchmarks when this repo is itself a fork.
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
       contents: write # push baseline data to the gh-pages branch (main only)
       pull-requests: write # post comparison comments on PRs
