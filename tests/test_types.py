@@ -2,12 +2,15 @@
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from healpix_alchemy.constants import LEVEL
 from healpix_alchemy.types import Tile
 
+UniqAndExpected = tuple[NDArray[np.int64], list[str]]
 
-def _uniq_and_range(level, ipix):
+
+def _uniq_and_range(level: int, ipix: int) -> tuple[int, str]:
     """Construct a UNIQ index and its expected ``[lo,hi)`` range string.
 
     This is the definition of the UNIQ (NUNIQ) encoding,
@@ -19,7 +22,7 @@ def _uniq_and_range(level, ipix):
 
 
 @pytest.fixture
-def uniq_and_expected():
+def uniq_and_expected() -> UniqAndExpected:
     """UNIQ indices and expected ranges across every level, incl. boundaries."""
     rng = np.random.default_rng(12345)
     out = {}
@@ -32,13 +35,13 @@ def uniq_and_expected():
     return uniq, [out[u] for u in uniq.tolist()]
 
 
-def test_tiles_from_uniq(uniq_and_expected):
+def test_tiles_from_uniq(uniq_and_expected: UniqAndExpected) -> None:
     """The helper decodes UNIQ indices to the correct ranges at every level."""
     uniq, expected = uniq_and_expected
     assert list(Tile.tiles_from_uniq(uniq)) == expected
 
 
-def test_tiles_from_uniq_accepts_sequence():
+def test_tiles_from_uniq_accepts_sequence() -> None:
     """The helper accepts any array-like, not just numpy arrays."""
     uniq, expected = zip(_uniq_and_range(0, 0), _uniq_and_range(5, 100), strict=True)
     assert list(Tile.tiles_from_uniq(list(uniq))) == list(expected)

@@ -2,6 +2,7 @@
 
 from unittest.mock import Mock
 
+import psycopg
 import pytest
 import sqlalchemy as sa
 from pytest_postgresql import factories
@@ -13,7 +14,7 @@ postgresql_proc = factories.postgresql_proc(
 
 
 @pytest.fixture
-def engine(postgresql):
+def engine(postgresql: psycopg.Connection) -> sa.Engine:
     """Create an SQLAlchemy engine with a disposable PostgreSQL database."""
     return sa.create_engine(
         "postgresql+psycopg://",
@@ -24,7 +25,9 @@ def engine(postgresql):
 
 
 @pytest.fixture(autouse=True)
-def add_mock_create_engine(monkeypatch, request):
+def add_mock_create_engine(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
     """Monkey patch sqlalchemy.create_engine for doctests in README.md."""
     if request.node.name == "README.md":
         engine = request.getfixturevalue("engine")

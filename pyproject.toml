@@ -57,9 +57,13 @@ filterwarnings = [
 [tool.ruff.lint]
 extend-select = [
     "A",    # shadowing Python builtins
+    "ANN",  # require type annotations
+    "ARG",  # unused function arguments
     "B",    # bugbear: likely bugs and design problems
     "C4",   # unnecessary comprehensions and generator calls
+    "D",    # docstring presence and style
     "DTZ",  # naive (timezone-unaware) datetimes
+    "EM",   # string literals directly in raise statements
     "ERA",  # commented-out code
     "EXE",  # shebang and executable-bit consistency
     "FA",   # missing `from __future__ import annotations`
@@ -68,30 +72,38 @@ extend-select = [
     "I",    # import sorting
     "ICN",  # conventional import aliases (np, pd, ...)
     "INP",  # missing __init__.py in package directories
+    "N",    # PEP 8 naming conventions
     "NPY",  # numpy-specific rules
     "PD",   # pandas anti-patterns
     "PERF", # performance anti-patterns
     "PIE",  # misc lints
+    "PL",   # pylint
     "PT",   # pytest style
     "PTH",  # os.path calls that should use pathlib
+    "RET",  # return statement style
     "RUF",  # ruff-specific rules
+    "S",    # security checks
     "SIM",  # simplifiable code
     "SLF",  # private member access on other objects
     "T20",  # stray print statements
     "TID",  # tidy imports
+    "TRY",  # exception handling style
     "UP",   # outdated syntax for the minimum Python version
     "W",    # whitespace and deprecation warnings
-    # Would require some cleanup first (violation counts as of 2026-08):
-    # "ANN",  # require type annotations (~90; enable after annotating the API)
-    # "ARG",  # unused function arguments (8, mostly interface-required params)
-    # "D",    # docstring presence and style (~40)
-    # "EM",   # string literals directly in raise statements (1)
-    # "N",    # PEP 8 naming conventions (2)
-    # "PL",   # pylint's stricter opinions (3)
-    # "RET",  # return statement style (1)
-    # "S",    # security checks; flags asserts outside tests (2)
-    # "TRY",  # exception handling style (1)
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.pep8-naming]
+classmethod-decorators = [
+    "sqlalchemy.orm.declared_attr",
+    "sqlalchemy.orm.declared_attr.directive",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/conftest.py" = ["ARG001"]
+"tests/**" = ["S101"]
 
 [tool.coverage.run]
 omit = ["*/conftest.py", "*/tests/*"]
