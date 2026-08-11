@@ -1,2 +1,6 @@
 .venv
 .direnv
+
+*.egg-info
+**/*.pyc
+**/__pycache__/

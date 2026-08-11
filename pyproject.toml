@@ -6,12 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "healpix-alchemy"
 description = "SQLAlchemy extensions for HEALPix spatially indexed astronomy data"
 readme = "README.md"
-authors = [ { name = "Leo Singer", email = "leo.p.singer@nasa.gov" } ]
+authors = [{ name = "Leo Singer", email = "leo.p.singer@nasa.gov" }]
 license = "BSD-3-clause"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "Topic :: Database",
     "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Database",
 ]
 dependencies = [
     "astropy",
@@ -26,6 +26,7 @@ dynamic = ["version"]
 source = "https://github.com/skyportal/healpix-alchemy"
 
 [dependency-groups]
+dev = ["ruff", "towncrier", "ty"]
 test = [
     "astroquery",
     "numpy",
@@ -38,23 +39,78 @@ test = [
     "pytest-postgresql>=4.0.0",
 ]
 
+[tool.setuptools_scm]
+
 [tool.pytest.ini_options]
 addopts = "--doctest-glob *.md"
 doctest_plus = true
-doctest_optionflags = [
-    "ELLIPSIS",
-    "FLOAT_CMP"
+doctest_optionflags = ["ELLIPSIS", "FLOAT_CMP"]
+
+[tool.ruff.lint]
+extend-select = [
+    "B",    # bugbear: likely bugs and design problems
+    "C4",   # unnecessary comprehensions and generator calls
+    "I",    # import sorting
+    "NPY",  # numpy-specific rules
+    "PERF", # performance anti-patterns
+    "PIE",  # misc lints
+    "PT",   # pytest style
+    "RUF",  # ruff-specific rules
+    "SIM",  # simplifiable code
+    "UP",   # outdated syntax for the minimum Python version
+    "W",    # whitespace and deprecation warnings
+    # Currently clean on this codebase; enable any of these at no cost:
+    # "A",    # shadowing Python builtins
+    # "DTZ",  # naive (timezone-unaware) datetimes
+    # "ERA",  # commented-out code
+    # "FBT",  # boolean positional arguments ("boolean traps")
+    # "FURB", # modernization refactors
+    # "PD",   # pandas anti-patterns
+    # "PTH",  # os.path calls that should use pathlib
+    # "T20",  # stray print statements
+    # Would require some cleanup first (violation counts as of 2026-08):
+    # "ANN",  # require type annotations (~90; enable after annotating the API)
+    # "ARG",  # unused function arguments (8, mostly interface-required params)
+    # "D",    # docstring presence and style (~40)
+    # "EM",   # string literals directly in raise statements (1)
+    # "N",    # PEP 8 naming conventions (2)
+    # "PL",   # pylint's stricter opinions (3)
+    # "RET",  # return statement style (1)
+    # "S",    # security checks; flags asserts outside tests (2)
+    # "TRY",  # exception handling style (1)
 ]
-filterwarnings = [
-    "error::sqlalchemy.exc.SAWarning",
-    "error::DeprecationWarning",
-    "error::PendingDeprecationWarning"
-]
+
+[tool.ruff.format]
+exclude = ["*.md"]
 
 [tool.coverage.run]
-omit = [
-    "*/conftest.py",
-    "*/tests/*"
-]
+omit = ["*/conftest.py", "*/tests/*"]
 
-[tool.setuptools_scm]
+[tool.towncrier]
+directory = "changes.d"
+filename = "CHANGES.md"
+start_string = "<!-- towncrier release notes start -->\n"
+underlines = ["", "", ""]
+title_format = "## {version} ({project_date})"
+issue_format = "[#{issue}](https://github.com/skyportal/healpix-alchemy/pull/{issue})"
+ignore = ["README.md"]
+
+[[tool.towncrier.type]]
+directory = "breaking"
+name = "Breaking changes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "feature"
+name = "New features"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "bugfix"
+name = "Bug fixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "misc"
+name = "Other changes"
+showcontent = true

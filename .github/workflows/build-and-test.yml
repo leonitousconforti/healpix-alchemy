@@ -1,23 +1,35 @@
-# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
-
 name: Build and test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions: {}
 
 jobs:
-  build:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Lint with ruff
+        run: uv run --no-sync ruff check
+      - name: Check formatting with ruff
+        run: uv run --no-sync ruff format --check
+      - name: Typecheck with ty
+        run: uv run --no-sync ty check healpix_alchemy
+
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ['3.11', '3.12', '3.13', '3.14']
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         os: [ubuntu-latest, macos-latest]
         include:
           # only run benchmarks for the following configuration...
@@ -26,47 +38,48 @@ jobs:
             benchmark: true
 
     steps:
-    - name: Check out code
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install PostgreSQL
-      if: ${{ runner.os == 'macOS' }}
-      run: brew install postgresql
-    - name: Install Python package
-      run: pip install -e . --group test
-    - name: Test with pytest
-      env:
-        BENCHMARK: ${{ matrix.benchmark }}
-        SQLALCHEMY_WARN_20: 1
-      run: |
-        PYTESTARGS="--cov --cov-report=xml"
-        if [[ -z "${BENCHMARK}" ]]; then
-          PYTESTARGS="${PYTESTARGS} --benchmark-skip"
-        else
-          PYTESTARGS="${PYTESTARGS} --benchmark-group-by=fullfunc --benchmark-sort=fullname --benchmark-json benchmark_results.json"
-        fi
-        pytest ${PYTESTARGS}
-    # - name: Create runtime plots
-    #   if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'}}
-    #   run: |
-    #     mkdir plots
-    #     python .github/workflows/runtime_plots.py
-    # - name: Upload plots to github artifacts
-    #   if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'}}
-    #   uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
-    #   with:
-    #     name: runtime-plots
-    #     path: plots
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v7.0.0
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-    - name: Upload benchmark results to github artifacts
-      if: ${{ matrix.benchmark }}
-      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
-      with:
-        name: benchmark-results-json
-        path: benchmark_results.json
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up uv with Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install PostgreSQL
+        if: ${{ runner.os == 'macOS' }}
+        run: brew install postgresql
+
+      - name: Install Python package
+        run: uv sync --locked --group test
+      - name: Test with pytest
+        env:
+          BENCHMARK: ${{ matrix.benchmark }}
+          SQLALCHEMY_WARN_20: 1
+        run: |
+          PYTESTARGS="--cov --cov-report=xml"
+          if [[ -z "${BENCHMARK}" ]]; then
+            PYTESTARGS="${PYTESTARGS} --benchmark-skip"
+          else
+            PYTESTARGS="${PYTESTARGS} --benchmark-group-by=fullfunc --benchmark-sort=fullname --benchmark-json benchmark_results.json"
+          fi
+          uv run --no-sync pytest ${PYTESTARGS}
+      # - name: Create runtime plots
+      #   if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'}}
+      #   run: |
+      #     mkdir plots
+      #     python .github/workflows/runtime_plots.py
+      # - name: Upload plots to github artifacts
+      #   if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'}}
+      #   uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+      #   with:
+      #     name: runtime-plots
+      #     path: plots
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload benchmark results to github artifacts
+        if: ${{ matrix.benchmark }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: benchmark-results-json
+          path: benchmark_results.json

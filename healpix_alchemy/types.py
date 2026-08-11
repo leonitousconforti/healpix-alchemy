@@ -8,6 +8,7 @@ import sqlalchemy as sa
 from astropy.coordinates import SkyCoord
 from astropy_healpix import uniq_to_level_ipix
 from mocpy import MOC
+from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import INT8RANGE
 
 from .constants import HPX, LEVEL, PIXEL_AREA_LITERAL
@@ -88,7 +89,7 @@ class Tile(sa.TypeDecorator):
         return (f"[{a},{b})" for a, b in zip(lo.tolist(), hi.tolist()))
 
 
-@sa.event.listens_for(sa.Index, "after_parent_attach")
+@event.listens_for(sa.Index, "after_parent_attach")
 def _create_indices(index, parent):
     """Set index method to SP-GiST_ for any indexed Tile or Region columns.
 

@@ -1,12 +1,6 @@
 # Changes
 
-## 1.2.0 (unreleased)
-
-- Add ``Tile.tiles_from_uniq``, a vectorized helper that converts an array of
-  UNIQ indices to tile range strings for fast bulk ingestion of multi-order sky
-  maps via PostgreSQL ``COPY``.
-
-- Require astropy-healpix >= 2.
+<!-- towncrier release notes start -->
 
 ## 1.1.1 (2026-06-23)
 
