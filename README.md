@@ -484,6 +484,12 @@ should generally be used in a subquery.
 
 #### Which galaxies are within the 90% credible region?
 
+Because the probability density threshold comes from a subquery, the query
+planner cannot estimate how many sky map tiles will pass it, and on large
+tables it may pick a join order that is slower by orders of magnitude.
+Materialize the credible region in a common table expression so that the
+planner evaluates it first and drives the join from it.
+
 ```pycon
 >>> cum_prob = (
 ...     sa.func.sum(SkymapTile.probdensity * SkymapTile.hpx.area)
@@ -498,21 +504,24 @@ should generally be used in a subquery.
 ...     .filter(subquery.columns.cum_prob <= 0.9)
 ...     .scalar_subquery()
 ... )
+>>> credible = (
+...     sa.select(ha.func.union(SkymapTile.hpx).label("hpx"))
+...     .filter(SkymapTile.id == 1, SkymapTile.probdensity >= min_probdensity)
+...     .cte("credible")
+...     .prefix_with("MATERIALIZED")
+... )
 >>> query = (
 ...     sa.select(Galaxy.id)
-...     .filter(
-...         SkymapTile.id == 1,
-...         SkymapTile.hpx.contains(Galaxy.hpx),
-...         SkymapTile.probdensity >= min_probdensity,
-...     )
+...     .filter(credible.columns.hpx.contains(Galaxy.hpx))
+...     .order_by(Galaxy.id)
 ...     .limit(5)
 ... )
 >>> for (galaxy_id,) in session.execute(query):
 ...     print(galaxy_id)
-2MASX J02424077-0000478
-2MASX J02352772-0921216
-2MASX J02273746-0109226
-2MASX J02414523+0026354
-2MASX J20095408-4822462
+2MASX J02092086-1007591
+2MASX J02092458-1008091
+2MASX J02092822-0940481
+2MASX J02093853-1008466
+2MASX J02094273-1011016
 
 ```

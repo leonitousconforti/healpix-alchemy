@@ -14,6 +14,7 @@ from pytest_benchmark.fixture import BenchmarkFixture
 from sqlalchemy import orm
 
 from healpix_alchemy import func
+from healpix_alchemy.constants import PIXEL_AREA
 
 from .models import FieldTile, Galaxy, SkymapTile
 
@@ -86,8 +87,11 @@ def test_crossmatch_galaxies_and_fields(
     bench_and_check(query, expected)
 
 
-@pytest.mark.usefixtures("random_fields", "random_sky_map")
-def test_fields_in_90pct_credible_region(bench: Bench) -> None:
+def test_fields_in_90pct_credible_region(
+    bench_and_check: BenchAndCheck,
+    random_fields: list[MOC],
+    random_sky_map: tuple[list[int], NDArray[np.float64]],
+) -> None:
     """Find which of N fields overlap the 90% credible region."""
     # Assemble query
     cum_prob = (
@@ -105,10 +109,86 @@ def test_fields_in_90pct_credible_region(bench: Bench) -> None:
         .filter(subquery1.columns.cum_prob <= CREDIBLE_LEVEL)
         .scalar_subquery()
     )
-    query = sa.select(sa.func.count(FieldTile.id.distinct())).filter(
-        SkymapTile.hpx.overlaps(FieldTile.hpx),
-        SkymapTile.probdensity >= min_probdensity,
+
+    # Materialize the credible region as merged tiles so that the planner
+    # scans it first and probes the (much larger) field tile index, instead
+    # of the reverse. The probdensity threshold comes from a subquery, so
+    # the planner cannot estimate its selectivity and otherwise picks a
+    # join order that is slower by orders of magnitude.
+    credible = (
+        sa.select(func.union(SkymapTile.hpx).label("hpx"))
+        .filter(SkymapTile.probdensity >= min_probdensity)
+        .cte("credible")
+        .prefix_with("MATERIALIZED")
     )
 
-    # Run benchmark
-    bench(query)
+    query = sa.select(sa.func.count(FieldTile.id.distinct())).filter(
+        credible.columns.hpx.overlaps(FieldTile.hpx)
+    )
+
+    # Expected result
+    tiles, probdensity = random_sky_map
+    lo, hi = np.asarray(tiles[:-1]), np.asarray(tiles[1:])
+    order = np.argsort(probdensity)[::-1]
+    cum_prob = np.cumsum((probdensity * (hi - lo))[order]) * PIXEL_AREA
+    threshold = float(np.min(probdensity[order][cum_prob <= CREDIBLE_LEVEL]))
+    # The credible tiles are disjoint and sorted, so a field overlaps the
+    # credible region if and only if, for any of its tile ranges [a, b),
+    # the first credible tile ending after a starts before b.
+    cred_lo, cred_hi = lo[probdensity >= threshold], hi[probdensity >= threshold]
+    result = 0
+    for moc in random_fields:
+        a, b = np.transpose(moc.to_depth29_ranges.astype(np.int64))
+        i = np.searchsorted(cred_hi, a, side="right")
+        result += bool(
+            np.any((i < len(cred_lo)) & (cred_lo[np.minimum(i, len(cred_lo) - 1)] < b))
+        )
+    expected = ((result,),)
+
+    # Run benchmark, check result
+    bench_and_check(query, expected)
+
+
+def test_integrated_probability(
+    bench_and_check: BenchAndCheck,
+    random_fields: list[MOC],
+    random_sky_map: tuple[list[int], NDArray[np.float64]],
+) -> None:
+    """Find the probability contained within the union of N fields."""
+    # Assemble query
+    union = sa.select(func.union(FieldTile.hpx).label("hpx")).subquery()
+    prob = sa.func.sum(
+        SkymapTile.probdensity * (union.columns.hpx * SkymapTile.hpx).area
+    )
+    query = sa.select(prob).filter(
+        SkymapTile.id == 1, union.columns.hpx.overlaps(SkymapTile.hpx)
+    )
+
+    # Expected result: merge every field's tile ranges into a union, then
+    # integrate the sky map's probability density over the merged ranges.
+    ranges = np.concatenate([moc.to_depth29_ranges for moc in random_fields]).astype(
+        np.int64
+    )
+    order = np.argsort(ranges[:, 0])
+    lo, hi = ranges[order, 0], ranges[order, 1]
+    running_hi = np.maximum.accumulate(hi)
+    starts = np.flatnonzero(np.concatenate(([True], lo[1:] > running_hi[:-1])))
+    union_lo = lo[starts]
+    union_hi = running_hi[np.append(starts[1:] - 1, len(hi) - 1)]
+
+    tiles, probdensity = random_sky_map
+    bounds = np.asarray(tiles)
+    cum = np.concatenate(([0.0], np.cumsum(probdensity * np.diff(bounds))))
+
+    def integral(x: NDArray[np.int64]) -> NDArray[np.float64]:
+        """Integrate the probability density over level-29 pixels [0, x)."""
+        i = np.clip(
+            np.searchsorted(bounds, x, side="right") - 1, 0, len(probdensity) - 1
+        )
+        return cum[i] + probdensity[i] * (x - bounds[i])
+
+    result = np.sum(integral(union_hi) - integral(union_lo)) * PIXEL_AREA
+    expected = ((result,),)
+
+    # Run benchmark, check result
+    bench_and_check(query, expected)
