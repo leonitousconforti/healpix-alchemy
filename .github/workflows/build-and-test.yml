@@ -50,12 +50,15 @@ jobs:
             # Without a valid locale the postmaster refuses to start.
             export LC_ALL=en_US.UTF-8
           else
+            # The runner image has a cluster of its own on the default port.
+            sudo systemctl stop postgresql || true
             export LC_ALL=C.UTF-8
           fi
           export PATH="$(pg_config --bindir):$PATH"
           initdb -D "$RUNNER_TEMP/pgdata" -U postgres --auth=trust
           pg_ctl -D "$RUNNER_TEMP/pgdata" -l "$RUNNER_TEMP/pgdata.log" \
-            -o "-p 5432 -c fsync=off -c synchronous_commit=off -c full_page_writes=off" start
+            -o "-p 5432 -c fsync=off -c synchronous_commit=off -c full_page_writes=off" start \
+            || { cat "$RUNNER_TEMP/pgdata.log"; exit 1; }
 
       - name: Start PostgreSQL
         if: ${{ runner.os == 'Windows' }}
@@ -69,6 +72,10 @@ jobs:
           initdb -D "$env:RUNNER_TEMP\pgdata" -U postgres --auth=trust
           pg_ctl -D "$env:RUNNER_TEMP\pgdata" -l "$env:RUNNER_TEMP\pgdata.log" `
             -o "-p 5432 -c fsync=off -c synchronous_commit=off -c full_page_writes=off" start
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content "$env:RUNNER_TEMP\pgdata.log"
+            exit 1
+          }
 
       - run: uv sync --locked --group test
       - run: uv run --no-sync pytest --benchmark-skip
