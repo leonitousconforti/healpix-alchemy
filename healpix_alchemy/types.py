@@ -86,7 +86,7 @@ class Tile(sa.TypeDecorator):
         shift = 2 * (LEVEL - level)
         lo = ipix << shift
         hi = (ipix + 1) << shift
-        return (f"[{a},{b})" for a, b in zip(lo.tolist(), hi.tolist()))
+        return (f"[{a},{b})" for a, b in zip(lo.tolist(), hi.tolist(), strict=True))
 
 
 @event.listens_for(sa.Index, "after_parent_attach")
@@ -96,7 +96,7 @@ def _create_indices(index, parent):
     .. _SP-GiST: https://www.postgresql.org/docs/current/spgist.html
     """
     if (
-        index._column_flag
+        index._column_flag  # noqa: SLF001
         and len(index.expressions) == 1
         and isinstance(index.expressions[0], sa.Column)
         and isinstance(index.expressions[0].type, Tile)
