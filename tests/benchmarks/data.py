@@ -146,10 +146,13 @@ def get_random_fields(n: int, cursor: psycopg.Cursor) -> list[MOC]:
 def _generate_sky_map(n: int) -> tuple[list[int], NDArray[np.float64], str]:
     rng = np.random.default_rng(RANDOM_SKY_MAP_SEED)
     # Make a randomly subdivided sky map
-    npix = HPX.npix
-    tiles = np.arange(0, npix + 1, 4**LEVEL).tolist()
+    # Use `range` rather than `np.arange`: the latter computes its length in
+    # floating point, and npix + 1 is not representable in float64, so it
+    # silently drops the last coarse tile and leaves 1/12 of the sky uncovered.
+    npix = int(HPX.npix)
+    tiles = list(range(0, npix + 1, 4**LEVEL))
     while len(tiles) < n:
-        i = rng.integers(len(tiles))
+        i = int(rng.integers(len(tiles)))
         lo = 0 if i == 0 else tiles[i - 1]
         hi = tiles[i]
         diff = (hi - lo) // 4
