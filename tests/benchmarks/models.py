@@ -10,7 +10,8 @@ from healpix_alchemy.types import Point, Tile
 class Base:
     @orm.declared_attr
     def __tablename__(cls):
-        return cls.__name__.lower()
+        # `orm.declared_attr` passes the class, but ty assumes an instance.
+        return cls.__name__.lower()  # ty: ignore[unresolved-attribute]
 
 
 class Galaxy(Base):

@@ -1,24 +1,26 @@
 import numpy as np
 import pytest
+import sqlalchemy as sa
 from sqlalchemy import orm
 
 from . import data, models
 
 
 @pytest.fixture
-def session(engine):
+def session(engine: sa.engine.Engine):
     with orm.Session(engine) as session:
         yield session
 
 
 @pytest.fixture
-def cursor(session):
+def cursor(session: orm.Session):
     return session.connection().connection.cursor()
 
 
 @pytest.fixture
-def tables(engine):
-    models.Base.metadata.create_all(engine)
+def tables(engine: sa.engine.Engine) -> None:
+    # ty can't see the attributes that `orm.as_declarative` adds to `Base`.
+    models.Base.metadata.create_all(engine)  # ty: ignore[unresolved-attribute]
 
 
 @pytest.fixture

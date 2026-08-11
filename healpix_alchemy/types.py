@@ -90,7 +90,7 @@ class Tile(sa.TypeDecorator):
 
 
 @event.listens_for(sa.Index, "after_parent_attach")
-def _create_indices(index, parent):
+def _create_indices(index: sa.Index, parent: sa.Table) -> None:
     """Set index method to SP-GiST_ for any indexed Tile or Region columns.
 
     .. _SP-GiST: https://www.postgresql.org/docs/current/spgist.html

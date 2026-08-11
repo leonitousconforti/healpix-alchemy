@@ -4,7 +4,13 @@ Notes
 -----
 We use the psycopg ``copy`` rather than SQLAlchemy for fast insertion.
 
+The data is deterministic, so generation is memoized: several benchmarks
+request the same sizes, and only the ``COPY`` into each test's fresh database
+needs to happen per test.
+
 """
+
+from functools import cache
 
 import numpy as np
 import pytest
@@ -22,7 +28,7 @@ from .models import Field, FieldTile, Galaxy, Skymap, SkymapTile
 )
 
 
-def get_ztf_footprint_corners():
+def get_ztf_footprint_corners() -> tuple[u.Quantity, u.Quantity]:
     """Return the corner offsets of the ZTF footprint.
 
     Notes
@@ -70,37 +76,49 @@ def get_random_points(n, seed):
         return uniform_spherical_random_surface(n)
 
 
-def get_random_galaxies(n, cursor):
+@cache
+def _generate_galaxies(n):
     points = SkyCoord(get_random_points(n, RANDOM_GALAXIES_SEED))
     hpx = HPX.skycoord_to_healpix(points)
+    return points, "\n".join(f"{i}" for i in hpx)
+
+
+def get_random_galaxies(n, cursor):
+    points, rows = _generate_galaxies(n)
 
     with cursor.copy(f"COPY {Galaxy.__tablename__} (hpx) FROM STDIN") as copy:
-        copy.write("\n".join(f"{i}" for i in hpx))
+        copy.write(rows)
 
     return points
 
 
-def get_random_fields(n, cursor):
+@cache
+def _generate_fields(n):
     centers = SkyCoord(get_random_points(n, RANDOM_FIELDS_SEED))
     footprints = get_footprints_grid(*get_ztf_footprint_corners(), centers)
     mocs = [MOC.from_polygon_skycoord(footprint) for footprint in footprints]
+    field_rows = "\n".join(f"{i}" for i in range(len(mocs)))
+    tile_rows = "\n".join(
+        f"{i}\t{hpx}" for i, moc in enumerate(mocs) for hpx in Tile.tiles_from(moc)
+    )
+
+    return mocs, field_rows, tile_rows
+
+
+def get_random_fields(n, cursor):
+    mocs, field_rows, tile_rows = _generate_fields(n)
 
     with cursor.copy(f"COPY {Field.__tablename__} FROM STDIN") as copy:
-        copy.write("\n".join(f"{i}" for i in range(len(mocs))))
+        copy.write(field_rows)
 
     with cursor.copy(f"COPY {FieldTile.__tablename__} FROM STDIN") as copy:
-        copy.write(
-            "\n".join(
-                f"{i}\t{hpx}"
-                for i, moc in enumerate(mocs)
-                for hpx in Tile.tiles_from(moc)
-            )
-        )
+        copy.write(tile_rows)
 
     return mocs
 
 
-def get_random_sky_map(n, cursor):
+@cache
+def _generate_sky_map(n):
     rng = np.random.default_rng(RANDOM_SKY_MAP_SEED)
     # Make a randomly subdivided sky map
     npix = HPX.npix
@@ -119,15 +137,21 @@ def get_random_sky_map(n, cursor):
     probdensity = rng.uniform(0, 1, size=len(tiles) - 1)
     probdensity /= np.sum(np.diff(tiles) * probdensity) * PIXEL_AREA
 
+    rows = "\n".join(
+        f"1\t[{lo},{hi})\t{p}"
+        for lo, hi, p in zip(tiles[:-1], tiles[1:], probdensity, strict=True)
+    )
+
+    return tiles, probdensity, rows
+
+
+def get_random_sky_map(n, cursor):
+    tiles, probdensity, rows = _generate_sky_map(n)
+
     with cursor.copy(f"COPY {Skymap.__tablename__} FROM STDIN") as copy:
         copy.write("1")
 
     with cursor.copy(f"COPY {SkymapTile.__tablename__} FROM STDIN") as copy:
-        copy.write(
-            "\n".join(
-                f"1\t[{lo},{hi})\t{p}"
-                for lo, hi, p in zip(tiles[:-1], tiles[1:], probdensity)
-            )
-        )
+        copy.write(rows)
 
     return tiles, probdensity
