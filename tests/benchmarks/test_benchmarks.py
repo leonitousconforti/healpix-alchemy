@@ -14,6 +14,7 @@ from pytest_benchmark.fixture import BenchmarkFixture
 from sqlalchemy import orm
 
 from healpix_alchemy import func
+from healpix_alchemy.constants import PIXEL_AREA
 
 from .models import FieldTile, Galaxy, SkymapTile
 
@@ -86,9 +87,12 @@ def test_crossmatch_galaxies_and_fields(
     bench_and_check(query, expected)
 
 
-@pytest.mark.usefixtures("random_fields", "random_sky_map")
-def test_fields_in_90pct_credible_region(bench: Bench) -> None:
-    """Find which of N fields overlap the 90% credible region."""
+def test_fields_in_90pct_credible_region(
+    bench_and_check: BenchAndCheck,
+    random_fields: list[MOC],
+    random_sky_map: tuple[list[int], NDArray[np.float64]],
+) -> None:
+    """Find how many of N fields overlap the 90% credible region."""
     # Assemble query
     cum_prob = (
         sa.func.sum(SkymapTile.probdensity * SkymapTile.hpx.area)
@@ -120,5 +124,24 @@ def test_fields_in_90pct_credible_region(bench: Bench) -> None:
         credible.columns.hpx.overlaps(FieldTile.hpx)
     )
 
-    # Run benchmark
-    bench(query)
+    # Expected result
+    tiles, probdensity = random_sky_map
+    lo, hi = np.asarray(tiles[:-1]), np.asarray(tiles[1:])
+    order = np.argsort(probdensity)[::-1]
+    cum_prob = np.cumsum((probdensity * (hi - lo))[order]) * PIXEL_AREA
+    threshold = float(np.min(probdensity[order][cum_prob <= CREDIBLE_LEVEL]))
+    # The credible tiles are disjoint and sorted, so a field overlaps the
+    # credible region if and only if, for any of its tile ranges [a, b),
+    # the first credible tile ending after a starts before b.
+    cred_lo, cred_hi = lo[probdensity >= threshold], hi[probdensity >= threshold]
+    result = 0
+    for moc in random_fields:
+        a, b = np.transpose(moc.to_depth29_ranges)
+        i = np.searchsorted(cred_hi, a, side="right")
+        result += bool(
+            np.any((i < len(cred_lo)) & (cred_lo[np.minimum(i, len(cred_lo) - 1)] < b))
+        )
+    expected = ((result,),)
+
+    # Run benchmark, check result
+    bench_and_check(query, expected)
