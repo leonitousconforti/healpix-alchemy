@@ -39,10 +39,10 @@ test = [
     "pytest-postgresql>=4.0.0",
 ]
 
-[tool.setuptools_scm]
-
 [tool.uv]
 default-groups = ["dev", "test"]
+
+[tool.setuptools_scm]
 
 [tool.pytest.ini_options]
 addopts = "--doctest-glob *.md"
@@ -92,9 +92,6 @@ extend-select = [
     # "S",    # security checks; flags asserts outside tests (2)
     # "TRY",  # exception handling style (1)
 ]
-
-[tool.ruff.format]
-exclude = ["*.md"]
 
 [tool.coverage.run]
 omit = ["*/conftest.py", "*/tests/*"]
