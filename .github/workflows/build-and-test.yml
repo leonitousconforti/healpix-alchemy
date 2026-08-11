@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -36,6 +36,29 @@ jobs:
       - name: Install PostgreSQL
         if: ${{ runner.os == 'macOS' }}
         run: brew install postgresql
+
+      - name: Set up PostgreSQL for Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          # PostgreSQL is preinstalled on the Windows runners, but its bin
+          # directory is not on PATH, so pytest-postgresql cannot find
+          # pg_config to locate pg_ctl.
+          $bin = $env:PGBIN
+          if (-not $bin -or -not (Test-Path $bin)) {
+            $bin = Get-ChildItem 'C:\Program Files\PostgreSQL\*\bin' -ErrorAction SilentlyContinue |
+              Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $bin) { throw 'Could not find a PostgreSQL bin directory' }
+          Write-Host "Using $bin"
+          Add-Content $env:GITHUB_PATH $bin
+
+          # Keep the PostgreSQL data directories that pytest-postgresql creates
+          # off the system drive, as pytest-postgresql itself does on Windows.
+          # Forward slashes because pytest splits PYTEST_ADDOPTS with shlex,
+          # which would eat the backslashes.
+          $temp = '${{ runner.temp }}'.Replace('\', '/')
+          Add-Content $env:GITHUB_ENV "PYTEST_ADDOPTS=--basetemp=$temp/pytest-basetemp"
 
       - run: uv sync --locked --group test
       - run: uv run --no-sync pytest --benchmark-skip
