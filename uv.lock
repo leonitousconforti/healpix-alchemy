@@ -543,7 +543,7 @@ requires-dist = [
     { name = "astropy" },
     { name = "astropy-healpix", specifier = ">=2" },
     { name = "mocpy", specifier = ">=0.12.2" },
-    { name = "sqlalchemy", specifier = ">=1.4" },
+    { name = "sqlalchemy", specifier = ">=2" },
 ]
 
 [package.metadata.requires-dev]
