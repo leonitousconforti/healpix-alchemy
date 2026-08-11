@@ -14,6 +14,7 @@ from pytest_benchmark.fixture import BenchmarkFixture
 from sqlalchemy import orm
 
 from healpix_alchemy import func
+from healpix_alchemy.constants import PIXEL_AREA
 
 from .models import FieldTile, Galaxy, SkymapTile
 
@@ -124,3 +125,48 @@ def test_fields_in_90pct_credible_region(bench: Bench) -> None:
 
     # Run benchmark
     bench(query)
+
+
+def test_integrated_probability(
+    bench_and_check: BenchAndCheck,
+    random_fields: list[MOC],
+    random_sky_map: tuple[list[int], NDArray[np.float64]],
+) -> None:
+    """Find the probability contained within the union of N fields."""
+    # Assemble query
+    union = sa.select(func.union(FieldTile.hpx).label("hpx")).subquery()
+    prob = sa.func.sum(
+        SkymapTile.probdensity * (union.columns.hpx * SkymapTile.hpx).area
+    )
+    query = sa.select(prob).filter(
+        SkymapTile.id == 1, union.columns.hpx.overlaps(SkymapTile.hpx)
+    )
+
+    # Expected result: merge every field's tile ranges into a union, then
+    # integrate the sky map's probability density over the merged ranges.
+    ranges = np.concatenate([moc.to_depth29_ranges for moc in random_fields]).astype(
+        np.int64
+    )
+    order = np.argsort(ranges[:, 0])
+    lo, hi = ranges[order, 0], ranges[order, 1]
+    running_hi = np.maximum.accumulate(hi)
+    starts = np.flatnonzero(np.concatenate(([True], lo[1:] > running_hi[:-1])))
+    union_lo = lo[starts]
+    union_hi = running_hi[np.append(starts[1:] - 1, len(hi) - 1)]
+
+    tiles, probdensity = random_sky_map
+    bounds = np.asarray(tiles)
+    cum = np.concatenate(([0.0], np.cumsum(probdensity * np.diff(bounds))))
+
+    def integral(x: NDArray[np.int64]) -> NDArray[np.float64]:
+        """Integrate the probability density over level-29 pixels [0, x)."""
+        i = np.clip(
+            np.searchsorted(bounds, x, side="right") - 1, 0, len(probdensity) - 1
+        )
+        return cum[i] + probdensity[i] * (x - bounds[i])
+
+    result = np.sum(integral(union_hi) - integral(union_lo)) * PIXEL_AREA
+    expected = ((result,),)
+
+    # Run benchmark, check result
+    bench_and_check(query, expected)
