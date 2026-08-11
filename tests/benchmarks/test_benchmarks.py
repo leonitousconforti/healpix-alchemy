@@ -88,7 +88,7 @@ def test_crossmatch_galaxies_and_fields(
 
 @pytest.mark.usefixtures("random_fields", "random_sky_map")
 def test_fields_in_90pct_credible_region(bench: Bench) -> None:
-    """Find how many of N fields overlap the 90% credible region."""
+    """Find which of N fields overlap the 90% credible region."""
     # Assemble query
     cum_prob = (
         sa.func.sum(SkymapTile.probdensity * SkymapTile.hpx.area)
