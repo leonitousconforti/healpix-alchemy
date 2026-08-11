@@ -40,5 +40,5 @@ def test_tiles_from_uniq(uniq_and_expected):
 
 def test_tiles_from_uniq_accepts_sequence():
     """The helper accepts any array-like, not just numpy arrays."""
-    uniq, expected = zip(_uniq_and_range(0, 0), _uniq_and_range(5, 100))
+    uniq, expected = zip(_uniq_and_range(0, 0), _uniq_and_range(5, 100), strict=True)
     assert list(Tile.tiles_from_uniq(list(uniq))) == list(expected)
