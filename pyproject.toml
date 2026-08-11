@@ -45,12 +45,23 @@ test = [
 addopts = "--doctest-glob *.md"
 doctest_plus = true
 doctest_optionflags = ["ELLIPSIS", "FLOAT_CMP"]
+filterwarnings = [
+    "error::sqlalchemy.exc.SAWarning",
+    "error::DeprecationWarning",
+    "error::PendingDeprecationWarning",
+]
 
 [tool.ruff.lint]
 extend-select = [
     "B",    # bugbear: likely bugs and design problems
     "C4",   # unnecessary comprehensions and generator calls
+    "EXE",  # shebang and executable-bit consistency
+    "FA",   # missing `from __future__ import annotations`
     "I",    # import sorting
+    "ICN",  # conventional import aliases (np, pd, ...)
+    "INP",  # missing __init__.py in package directories
+    "SLF",  # private member access on other objects
+    "TID",  # tidy imports
     "NPY",  # numpy-specific rules
     "PERF", # performance anti-patterns
     "PIE",  # misc lints
