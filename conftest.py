@@ -7,9 +7,14 @@ import pytest
 import sqlalchemy as sa
 from pytest_postgresql import factories
 
-# The test databases are disposable, so trade durability for speed.
+# The test databases are disposable, so trade durability for speed. The
+# benchmarks sort millions of tiles, so give them enough work_mem to sort
+# in memory instead of spilling to disk.
 postgresql_proc = factories.postgresql_proc(
-    postgres_options="-c fsync=off -c synchronous_commit=off -c full_page_writes=off"
+    postgres_options=(
+        "-c fsync=off -c synchronous_commit=off -c full_page_writes=off"
+        " -c work_mem=256MB"
+    )
 )
 
 

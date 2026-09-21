@@ -14,7 +14,8 @@ from pytest_benchmark.fixture import BenchmarkFixture
 from sqlalchemy import orm
 
 from healpix_alchemy import func
-from healpix_alchemy.constants import PIXEL_AREA
+from healpix_alchemy.constants import PIXEL_AREA, PIXEL_AREA_LITERAL
+from healpix_alchemy.types import Tile
 
 from .models import FieldTile, Galaxy, SkymapTile
 
@@ -155,13 +156,106 @@ def test_integrated_probability(
     random_sky_map: tuple[list[int], NDArray[np.float64]],
 ) -> None:
     """Find the probability contained within the union of N fields."""
-    # Assemble query
-    union = sa.select(func.union(FieldTile.hpx).label("hpx")).subquery()
-    prob = sa.func.sum(
-        SkymapTile.probdensity * (union.columns.hpx * SkymapTile.hpx).area
+    # Assemble query. Feeding all field tiles straight into `func.union`
+    # makes `range_agg` merge millions of mostly-overlapping ranges, and
+    # joining the union against the sky map by range overlap needs one index
+    # probe per union range, which dominates when the fields are sparse and
+    # the union has tens of thousands of ranges. Instead:
+    #
+    # 1. Sort the field tiles by their lower bound and keep only the part of
+    #    each tile that extends past the running maximum of the upper bounds
+    #    seen so far. These "extension" segments are disjoint and cover
+    #    exactly the union, so the remaining `range_agg` merges them cheaply.
+    tile = sa.select(
+        FieldTile.hpx.lower.label("lo"),
+        FieldTile.hpx.upper.label("hi"),
+        sa.func.max(FieldTile.hpx.upper)
+        .over(order_by=FieldTile.hpx.lower, rows=(None, -1))
+        .label("prev_hi"),
+    ).subquery()
+    segment = (
+        sa.select(
+            sa.func.int8range(
+                sa.func.greatest(tile.columns.lo, tile.columns.prev_hi),
+                tile.columns.hi,
+                type_=Tile,
+            ).label("hpx")
+        )
+        .filter(
+            sa.or_(
+                tile.columns.prev_hi.is_(None),
+                tile.columns.hi > tile.columns.prev_hi,
+            )
+        )
+        .subquery()
     )
-    query = sa.select(prob).filter(
-        SkymapTile.id == 1, union.columns.hpx.overlaps(SkymapTile.hpx)
+    union = (
+        sa.select(func.union(segment.columns.hpx).label("hpx"))
+        .cte("field_union")
+        .prefix_with("MATERIALIZED")
+    )
+
+    # 2. The integral over each union range [lo, hi) is F(hi) - F(lo), where
+    #    F is the cumulative integral of the sky map: a continuous, piecewise
+    #    linear function of the pixel index. Evaluate F at all the union
+    #    boundaries at once by merging them with the sorted sky map tiles: a
+    #    running count of sky map rows in the merged stream gives the sky map
+    #    tile that governs each boundary, replacing per-range index probes
+    #    with sorts.
+    skymap = (
+        sa.select(
+            sa.func.row_number().over(order_by=SkymapTile.hpx.lower).label("rn"),
+            SkymapTile.hpx.lower.label("x"),
+            SkymapTile.probdensity.label("probdensity"),
+            sa.func.coalesce(
+                sa.func.sum(SkymapTile.probdensity * SkymapTile.hpx.length).over(
+                    order_by=SkymapTile.hpx.lower, rows=(None, -1)
+                ),
+                0.0,
+            ).label("cum"),
+        )
+        .filter(SkymapTile.id == 1)
+        .cte("skymap_cum")
+        .prefix_with("MATERIALIZED")
+    )
+    boundary = sa.union_all(
+        sa.select(
+            union.columns.hpx.lower.label("x"),
+            sa.literal(-1).label("sign"),
+            sa.false().label("is_skymap"),
+        ),
+        sa.select(union.columns.hpx.upper, sa.literal(1), sa.false()),
+        sa.select(SkymapTile.hpx.lower, sa.literal(0), sa.true()).filter(
+            SkymapTile.id == 1
+        ),
+    ).subquery()
+    event = sa.select(
+        boundary.columns.x,
+        boundary.columns.sign,
+        boundary.columns.is_skymap,
+        sa.func.count()
+        .filter(boundary.columns.is_skymap)
+        .over(
+            order_by=(boundary.columns.x, boundary.columns.is_skymap.desc()),
+            rows=(None, 0),
+        )
+        .label("rn"),
+    ).subquery()
+
+    prob = (
+        sa.func.sum(
+            event.columns.sign
+            * (
+                skymap.columns.cum
+                + skymap.columns.probdensity * (event.columns.x - skymap.columns.x)
+            )
+        )
+        * PIXEL_AREA_LITERAL
+    )
+    query = (
+        sa.select(prob)
+        .select_from(event.join(skymap, event.columns.rn == skymap.columns.rn))
+        .filter(~event.columns.is_skymap)
     )
 
     # Expected result: merge every field's tile ranges into a union, then
