@@ -1,0 +1,53 @@
+# No versioned_files: the version lives only in git tags (via setuptools_scm),
+# so Knope reads the current version from the latest release tag.
+[package]
+changelog = "CHANGES.md"
+extra_changelog_sections = [{ name = "Other changes", types = ["misc"] }]
+
+# Versioning is driven by changesets only, not conventional commits.
+[changes]
+ignore_conventional_commits = true
+
+[[workflows]]
+name = "document-change"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "Command"
+command = "git switch -c release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = "git commit -m \"chore: prepare release $version\""
+
+[[workflows.steps]]
+type = "Command"
+command = "git push --force --set-upstream origin release"
+
+[[workflows.steps]]
+type = "CreatePullRequest"
+base = "main"
+
+[workflows.steps.title]
+template = "chore: prepare release $version"
+
+[workflows.steps.body]
+template = "This PR was created by Knope. Merging it will tag and publish a new release.\n\n$changelog"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "Release"
+
+[github]
+owner = "skyportal"
+repo = "healpix-alchemy"

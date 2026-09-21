@@ -1,7 +1,5 @@
 # Changes
 
-<!-- towncrier release notes start -->
-
 ## 1.1.1 (2026-06-23)
 
 - Support NumPy 2. Drop support for Python 3.10, which is no longer expected to

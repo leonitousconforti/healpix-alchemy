@@ -26,7 +26,7 @@ dynamic = ["version"]
 source = "https://github.com/skyportal/healpix-alchemy"
 
 [dependency-groups]
-dev = ["ruff", "towncrier", "ty"]
+dev = ["ruff", "ty"]
 test = [
     "astroquery",
     "numpy",
@@ -108,31 +108,3 @@ classmethod-decorators = [
 [tool.coverage.run]
 omit = ["*/conftest.py", "*/tests/*"]
 
-[tool.towncrier]
-directory = "changes.d"
-filename = "CHANGES.md"
-start_string = "<!-- towncrier release notes start -->\n"
-underlines = ["", "", ""]
-title_format = "## {version} ({project_date})"
-issue_format = "[#{issue}](https://github.com/skyportal/healpix-alchemy/pull/{issue})"
-ignore = ["README.md"]
-
-[[tool.towncrier.type]]
-directory = "breaking"
-name = "Breaking changes"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "feature"
-name = "New features"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "bugfix"
-name = "Bug fixes"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "misc"
-name = "Other changes"
-showcontent = true
