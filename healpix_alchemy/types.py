@@ -8,7 +8,8 @@ from astropy.coordinates import SkyCoord
 from astropy_healpix import uniq_to_level_ipix
 from mocpy import MOC
 from numpy.typing import ArrayLike
-from sqlalchemy.dialects.postgresql import INT8RANGE
+from sqlalchemy.dialects.postgresql import INT8RANGE, Range
+from typing_extensions import override
 
 from .constants import HPX, LEVEL, PIXEL_AREA_LITERAL
 
@@ -19,6 +20,7 @@ class Point(sa.TypeDecorator[int]):
     cache_ok = True
     impl = sa.BigInteger
 
+    @override
     def process_bind_param(
         self,
         value: SkyCoord | tuple[float, float] | np.integer | int | None,
@@ -33,15 +35,16 @@ class Point(sa.TypeDecorator[int]):
         return value
 
 
-class Tile(sa.TypeDecorator[str]):
+class Tile(sa.TypeDecorator[Range[int]]):
     cache_ok = True
     impl = INT8RANGE
 
+    @override
     def process_bind_param(
         self,
-        value: int | np.integer | tuple[int, int] | str | None,
+        value: int | np.integer | tuple[int, int] | str | Range[int] | None,
         dialect: sa.Dialect,
-    ) -> str | None:
+    ) -> str | Range[int] | None:
         if isinstance(value, (int, np.integer)):
             level, ipix = uniq_to_level_ipix(value)
             shift = 2 * (LEVEL - level)

@@ -18,6 +18,7 @@ dependencies = [
     "astropy_healpix>=2",
     "mocpy>=0.12.2",
     "sqlalchemy>=2",
+    "typing_extensions",
 ]
 requires-python = ">=3.11"
 dynamic = ["version"]
